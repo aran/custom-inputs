@@ -3,7 +3,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { buildSystemPrompt } from "@/lib/system-prompt";
 import { TOOL_DEFINITIONS } from "@/lib/claude";
 import { log } from "@/lib/logger";
-import * as Sentry from "@sentry/nextjs";
 import type { CustomInputComponent } from "@/types/chat";
 
 export async function POST(req: NextRequest) {
@@ -80,7 +79,6 @@ export async function POST(req: NextRequest) {
             errorType: err instanceof Anthropic.APIError ? "api_error" : "stream_error",
             errorMessage,
           });
-          Sentry.captureException(err);
 
           controller.enqueue(
             encoder.encode(
@@ -108,7 +106,6 @@ export async function POST(req: NextRequest) {
       errorType: err instanceof Anthropic.APIError ? "api_error" : "request_error",
       errorMessage,
     });
-    Sentry.captureException(err);
 
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: err instanceof Anthropic.APIError ? err.status : 500,

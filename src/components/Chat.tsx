@@ -14,7 +14,6 @@ import CustomInputPanel from "./CustomInputPanel";
 import ApiKeySettings from "./ApiKeySettings";
 import ErrorBoundary from "./ErrorBoundary";
 import { clientLog } from "@/lib/client-logger";
-import * as Sentry from "@sentry/nextjs";
 import type Anthropic from "@anthropic-ai/sdk";
 
 /**
@@ -205,12 +204,6 @@ export default function Chat() {
     } catch (err) {
       clientLog("error", "Chat", "Request failed", {
         error: err instanceof Error ? err.message : String(err),
-      });
-      Sentry.captureException(err, {
-        extra: {
-          messageCount: conversationLog.current.length,
-          hasActiveComponent: !!activeComponent,
-        },
       });
       setMessages((prev) => [
         ...prev,
