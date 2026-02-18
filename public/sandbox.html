@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    // Listen for code injection from parent
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'render') {
+        document.getElementById('root').innerHTML = event.data.code;
+        // Execute any script tags in the injected code
+        var scripts = document.getElementById('root').querySelectorAll('script');
+        scripts.forEach(function(oldScript) {
+          var newScript = document.createElement('script');
+          if (oldScript.src) {
+            newScript.src = oldScript.src;
+          } else {
+            newScript.textContent = oldScript.textContent;
+          }
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+        // Report height to parent for auto-resize
+        requestAnimationFrame(function() {
+          var height = document.getElementById('root').scrollHeight;
+          parent.postMessage({ type: 'resize', height: height }, '*');
+        });
+      }
+    });
+
+    // Provide submitInput function for components
+    window.submitInput = function(data) {
+      parent.postMessage({ type: 'submit', data: data }, '*');
+    };
+
+    // Report height changes via ResizeObserver
+    var observer = new ResizeObserver(function(entries) {
+      for (var entry of entries) {
+        parent.postMessage({ type: 'resize', height: entry.contentRect.height }, '*');
+      }
+    });
+    observer.observe(document.getElementById('root'));
+  </script>
+</body>
+</html>
