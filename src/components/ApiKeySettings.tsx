@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getApiKey, setApiKey, clearApiKey, isValidApiKeyFormat } from "@/lib/storage";
 
 interface ApiKeySettingsProps {
@@ -11,14 +11,19 @@ export default function ApiKeySettings({ onKeyChange }: ApiKeySettingsProps) {
   const [key, setKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const initialized = useRef(false);
 
+  // Read stored key on mount and notify parent
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
     const stored = getApiKey();
     if (stored) {
       setSaved(true);
       onKeyChange(stored);
     }
-  }, [onKeyChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleSave() {
     setError("");

@@ -156,7 +156,7 @@ test.describe("Agent component iteration", () => {
 
     // Verify the API request included the component code
     expect(capturedRequest).toBeTruthy();
-    const ac = (capturedRequest as Record<string, unknown>)
+    const ac = (capturedRequest as unknown as Record<string, unknown>)
       .activeComponent as Record<string, string>;
     expect(ac.title).toBe("Test");
     expect(ac.code).toContain("test component code here");

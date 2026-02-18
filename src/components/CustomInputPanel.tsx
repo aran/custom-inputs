@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import type { CustomInputComponent } from "@/types/chat";
 import { createRenderMessage, isSandboxMessage } from "@/lib/sandbox";
 
@@ -16,8 +16,15 @@ export default function CustomInputPanel({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(200);
   const [error, setError] = useState<string | null>(null);
-  // Increment to force iframe remount when code changes
-  const [iframeKey, setIframeKey] = useState(0);
+
+  // Use a stable key derived from code content to force iframe remount on change
+  const iframeKey = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < component.code.length; i++) {
+      hash = ((hash << 5) - hash + component.code.charCodeAt(i)) | 0;
+    }
+    return hash;
+  }, [component.code]);
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -35,15 +42,6 @@ export default function CustomInputPanel({
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [handleMessage]);
-
-  // When code changes, remount the iframe so we get a fresh load event
-  const codeRef = useRef(component.code);
-  useEffect(() => {
-    if (codeRef.current !== component.code) {
-      codeRef.current = component.code;
-      setIframeKey((k) => k + 1);
-    }
-  }, [component.code]);
 
   // Send code when iframe loads
   useEffect(() => {
