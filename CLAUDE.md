@@ -4,7 +4,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**custom-inputs** — newly initialized project (no source code yet).
+**custom-inputs** — AI-customizable chat UI where Claude dynamically generates interactive input components at runtime.
+
+### Stack
+- Next.js 16 (App Router) + TypeScript + Tailwind CSS
+- Vitest (unit/integration tests) + Playwright (E2E browser tests)
+- Anthropic SDK for Claude API
+
+## Commands
+
+```bash
+npm run dev          # Start dev server on localhost:3000
+npm run build        # Production build (also runs tsc)
+npm run lint         # ESLint
+npm run test         # Vitest unit + integration tests
+npm run test:e2e     # Playwright browser tests (starts dev server)
+npm run test:all     # Both Vitest and Playwright
+
+npx tsc --noEmit     # Type check only
+```
+
+### Integration tests
+The prompt behavior tests in `tests/integration/prompt-behavior.test.ts` require `ANTHROPIC_API_KEY` in the environment. They skip gracefully without it.
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... npm run test
+```
+
+## Architecture
+
+### Key paths
+- `src/lib/system-prompt.ts` — System prompt template (the product)
+- `src/lib/claude.ts` — Anthropic API client + tool definitions
+- `src/lib/storage.ts` — localStorage helpers for API key
+- `src/lib/sandbox.ts` — postMessage protocol types
+- `src/components/Chat.tsx` — Main chat container (conversation state, API calls)
+- `src/components/CustomInputPanel.tsx` — Sandboxed iframe wrapper
+- `src/app/api/chat/route.ts` — SSE streaming API route
+- `public/sandbox.html` — iframe host with Tailwind CDN
+
+### Data flow
+1. User sends text → Chat.tsx adds to conversation log → POST to /api/chat
+2. Claude responds with text + optional `create_input_component` tool call
+3. Tool call → CustomInputPanel renders code in sandboxed iframe
+4. User interacts with component → `submitInput(data)` via postMessage
+5. Parent formats as `[Custom Input: Title] {json}` → adds to chat → sends to Claude
+6. Claude sees data + component state in system prompt → responds meaningfully
+
+### Conversation log
+`Chat.tsx` maintains a `conversationLog` ref (separate from display messages) that includes `tool_use` and `tool_result` blocks for proper Anthropic API formatting.
 
 ## Version Control
 
@@ -48,3 +96,8 @@ When you make a mistake:
 1. **Fix the immediate problem.**
 2. **Diagnose the root cause.** Why did this happen? Was it a missing check, a wrong assumption, an unclear convention?
 3. **Make an upstream fix.** If a convention or check could have prevented the mistake, add it — update this CLAUDE.md, add a lint rule, add a test, or improve the build. The goal is that the same class of mistake becomes mechanically impossible or automatically caught in the future.
+
+## Known Issues
+
+- Node 25's built-in `localStorage` has a limited API (no `removeItem`/`clear`). The Vitest setup file (`tests/setup.ts`) provides a full polyfill.
+- Vitest 4 changed test signature: timeout goes as second argument options `{ timeout: N }`, not third argument.
