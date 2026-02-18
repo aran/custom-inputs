@@ -12,35 +12,8 @@ import MessageList from "./MessageList";
 import TextInput from "./TextInput";
 import CustomInputPanel from "./CustomInputPanel";
 import ApiKeySettings from "./ApiKeySettings";
+import ErrorBoundary from "./ErrorBoundary";
 import type Anthropic from "@anthropic-ai/sdk";
-
-/**
- * Converts our Message[] into the Anthropic API's MessageParam[] format.
- * This must handle tool_use and tool_result blocks correctly.
- */
-function toApiMessages(
-  messages: Message[],
-  toolCallHistory: ToolCallRecord[]
-): Anthropic.MessageParam[] {
-  const result: Anthropic.MessageParam[] = [];
-
-  for (const msg of messages) {
-    result.push({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    });
-  }
-
-  // Inject tool_use and tool_result pairs from history
-  // We reconstruct the full conversation including tool interactions
-  return result;
-}
-
-interface ToolCallRecord {
-  toolCallId: string;
-  name: string;
-  input: Record<string, unknown>;
-}
 
 /**
  * Build the full API message history from our internal messages,
@@ -86,14 +59,15 @@ export default function Chat() {
   const [activeComponent, setActiveComponent] =
     useState<CustomInputComponent | null>(null);
 
-  // Full conversation log including tool interactions for API context
   const conversationLog = useRef<ConversationEntry[]>([]);
 
   const handleKeyChange = useCallback((key: string | null) => {
     setApiKey(key);
   }, []);
 
-  async function sendToApi(currentActiveComponent: CustomInputComponent | null) {
+  async function sendToApi(
+    currentActiveComponent: CustomInputComponent | null
+  ) {
     if (!apiKey) return;
     setIsLoading(true);
     setStreamingContent("");
@@ -112,8 +86,14 @@ export default function Chat() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "API request failed");
+        let errorMessage = "API request failed";
+        try {
+          const err = await res.json();
+          errorMessage = err.error || errorMessage;
+        } catch {
+          // Response wasn't JSON
+        }
+        throw new Error(errorMessage);
       }
 
       const reader = res.body!.getReader();
@@ -156,13 +136,11 @@ export default function Chat() {
       }
 
       if (finalMessage) {
-        // Add assistant response to conversation log
         conversationLog.current.push({
           type: "assistant",
           blocks: finalMessage.content as Anthropic.ContentBlock[],
         });
 
-        // Extract text content for display
         const textParts = finalMessage.content
           .filter(
             (b): b is { type: "text"; text: string } => b.type === "text"
@@ -171,14 +149,10 @@ export default function Chat() {
           .join("");
 
         if (textParts) {
-          const assistantMsg = createAssistantMessage(textParts);
-          setMessages((prev) => [...prev, assistantMsg]);
+          setMessages((prev) => [...prev, createAssistantMessage(textParts)]);
         }
 
-        // Handle tool calls
         const toolCalls = extractToolCalls(finalMessage.content);
-        let newComponent = currentActiveComponent;
-
         for (const call of toolCalls) {
           if (call.name === "create_input_component") {
             const { title, description, code } = call.input as {
@@ -186,10 +160,8 @@ export default function Chat() {
               description: string;
               code: string;
             };
-            newComponent = { title, description, code };
-            setActiveComponent(newComponent);
+            setActiveComponent({ title, description, code });
 
-            // Add tool_result to conversation log
             conversationLog.current.push({
               type: "tool_result",
               toolCallId: call.id,
@@ -199,10 +171,12 @@ export default function Chat() {
         }
       }
     } catch (err) {
-      const errorMsg = createAssistantMessage(
-        `Error: ${err instanceof Error ? err.message : "Something went wrong"}`
-      );
-      setMessages((prev) => [...prev, errorMsg]);
+      setMessages((prev) => [
+        ...prev,
+        createAssistantMessage(
+          `Error: ${err instanceof Error ? err.message : "Something went wrong"}`
+        ),
+      ]);
     } finally {
       setIsLoading(false);
       setStreamingContent("");
@@ -210,8 +184,7 @@ export default function Chat() {
   }
 
   function handleSendText(text: string) {
-    const userMsg = createUserMessage(text);
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, createUserMessage(text)]);
     conversationLog.current.push({ type: "user_text", content: text });
     sendToApi(activeComponent);
   }
@@ -225,32 +198,40 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-zinc-950">
-      <header className="px-4 py-3 border-b border-zinc-800">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-zinc-100">
+    <div className="flex flex-col h-dvh bg-zinc-950">
+      <header className="px-4 py-3 border-b border-zinc-800 shrink-0">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+          <h1 className="text-lg font-semibold text-zinc-100 shrink-0">
             Custom Inputs
           </h1>
-          <div className="w-64">
+          <div className="w-64 shrink-0">
             <ApiKeySettings onKeyChange={handleKeyChange} />
           </div>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full overflow-hidden">
+      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full min-h-0">
         <MessageList messages={messages} streamingContent={streamingContent} />
 
         {!apiKey && messages.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
+          <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm px-4 text-center">
             Enter your API key above to start chatting
           </div>
         )}
 
         {activeComponent && (
-          <CustomInputPanel
-            component={activeComponent}
-            onSubmit={handleCustomInputSubmit}
-          />
+          <ErrorBoundary
+            fallback={
+              <div className="mx-3 mb-2 p-3 text-sm text-red-400 bg-red-950/20 rounded-lg border border-red-900">
+                Failed to render custom input component
+              </div>
+            }
+          >
+            <CustomInputPanel
+              component={activeComponent}
+              onSubmit={handleCustomInputSubmit}
+            />
+          </ErrorBoundary>
         )}
 
         <TextInput onSend={handleSendText} disabled={isLoading || !apiKey} />
