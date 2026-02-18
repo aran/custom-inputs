@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import type { CustomInputComponent } from "@/types/chat";
 import { createRenderMessage, isSandboxMessage } from "@/lib/sandbox";
+import { clientLog } from "@/lib/client-logger";
 
 const MAX_IFRAME_HEIGHT = 500;
 const MIN_IFRAME_HEIGHT = 100;
@@ -33,13 +34,16 @@ export default function CustomInputPanel({
     (event: MessageEvent) => {
       if (!isSandboxMessage(event.data)) return;
       if (event.data.type === "submit") {
-        console.log("[CustomInputPanel] Submit received:", typeof event.data.data);
+        clientLog("info", "CustomInputPanel", "Submit received", { dataType: typeof event.data.data });
         onSubmit(event.data.data);
       } else if (event.data.type === "resize") {
         const reportedHeight = event.data.height;
         const capped = Math.max(MIN_IFRAME_HEIGHT, Math.min(MAX_IFRAME_HEIGHT, reportedHeight + 16));
         if (reportedHeight > MAX_IFRAME_HEIGHT) {
-          console.log(`[CustomInputPanel] Content height ${reportedHeight}px exceeds max ${MAX_IFRAME_HEIGHT}px, scrolling enabled`);
+          clientLog("debug", "CustomInputPanel", "Content exceeds max height, scrolling enabled", {
+            reportedHeight,
+            maxHeight: MAX_IFRAME_HEIGHT,
+          });
         }
         setHeight(capped);
       }
@@ -59,7 +63,7 @@ export default function CustomInputPanel({
 
     function sendCode() {
       try {
-        console.log(`[CustomInputPanel] Rendering "${component.title}" (${component.code.length} chars)`);
+        clientLog("info", "CustomInputPanel", "Rendering component", { title: component.title, codeLength: component.code.length });
         iframe!.contentWindow?.postMessage(
           createRenderMessage(component.code),
           "*"
@@ -67,7 +71,7 @@ export default function CustomInputPanel({
         setError(null);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to render component";
-        console.error("[CustomInputPanel] Render error:", msg);
+        clientLog("error", "CustomInputPanel", "Render error", { error: msg });
         setError(msg);
       }
     }

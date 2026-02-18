@@ -13,6 +13,8 @@ import TextInput from "./TextInput";
 import CustomInputPanel from "./CustomInputPanel";
 import ApiKeySettings from "./ApiKeySettings";
 import ErrorBoundary from "./ErrorBoundary";
+import { clientLog } from "@/lib/client-logger";
+import * as Sentry from "@sentry/nextjs";
 import type Anthropic from "@anthropic-ai/sdk";
 
 /**
@@ -86,7 +88,7 @@ export default function Chat() {
         }),
       });
 
-      console.log(`[Chat] API response: ${res.status}`);
+      clientLog("info", "Chat", "API response", { status: res.status });
       if (!res.ok) {
         let errorMessage = "API request failed";
         try {
@@ -127,7 +129,7 @@ export default function Chat() {
                 event.type === "content_block_start" &&
                 event.content_block?.type === "tool_use"
               ) {
-                console.log("[Chat] Tool use block started:", event.content_block.name);
+                clientLog("info", "Chat", "Tool use block started", { name: event.content_block.name });
                 setIsBuildingComponent(true);
               } else if (
                 event.type === "content_block_delta" &&
@@ -137,14 +139,15 @@ export default function Chat() {
                 setStreamingContent(fullText);
               } else if (event.type === "message_complete") {
                 finalMessage = event.message;
-                const types = event.message.content.map((b: ContentBlock) => b.type);
-                console.log("[Chat] Message complete, content types:", types);
+                clientLog("info", "Chat", "Message complete", {
+                  contentTypes: event.message.content.map((b: ContentBlock) => b.type),
+                });
               } else if (event.type === "error") {
                 throw new Error(event.error);
               }
             } catch (e) {
               if (e instanceof SyntaxError) {
-                console.warn("[Chat] SSE JSON parse error, data length:", data.length);
+                clientLog("warn", "Chat", "SSE JSON parse error", { dataLength: data.length });
                 continue;
               }
               throw e;
@@ -178,7 +181,7 @@ export default function Chat() {
               description: string;
               code: string;
             };
-            console.log(`[Chat] Tool call: create_input_component "${title}" (${code.length} chars)`);
+            clientLog("info", "Chat", "Tool call: create_input_component", { title, codeLength: code.length });
             setIsBuildingComponent(false);
             setActiveComponent({ title, description, code });
 
@@ -188,7 +191,7 @@ export default function Chat() {
               content: "Component rendered successfully.",
             });
           } else if (call.name === "clear_input_component") {
-            console.log("[Chat] Tool call: clear_input_component");
+            clientLog("info", "Chat", "Tool call: clear_input_component");
             setActiveComponent(null);
 
             conversationLog.current.push({
@@ -200,7 +203,15 @@ export default function Chat() {
         }
       }
     } catch (err) {
-      console.error("[Chat] Error:", err instanceof Error ? err.message : err);
+      clientLog("error", "Chat", "Request failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      Sentry.captureException(err, {
+        extra: {
+          messageCount: conversationLog.current.length,
+          hasActiveComponent: !!activeComponent,
+        },
+      });
       setMessages((prev) => [
         ...prev,
         createAssistantMessage(
