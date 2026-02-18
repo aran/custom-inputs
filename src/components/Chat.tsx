@@ -85,6 +85,7 @@ export default function Chat() {
         }),
       });
 
+      console.log(`[Chat] API response: ${res.status}`);
       if (!res.ok) {
         let errorMessage = "API request failed";
         try {
@@ -129,11 +130,16 @@ export default function Chat() {
                 setStreamingContent(fullText);
               } else if (event.type === "message_complete") {
                 finalMessage = event.message;
+                const types = event.message.content.map((b: ContentBlock) => b.type);
+                console.log("[Chat] Message complete, content types:", types);
               } else if (event.type === "error") {
                 throw new Error(event.error);
               }
             } catch (e) {
-              if (e instanceof SyntaxError) continue;
+              if (e instanceof SyntaxError) {
+                console.warn("[Chat] SSE JSON parse error, data length:", data.length);
+                continue;
+              }
               throw e;
             }
           }
@@ -165,6 +171,7 @@ export default function Chat() {
               description: string;
               code: string;
             };
+            console.log(`[Chat] Tool call: create_input_component "${title}" (${code.length} chars)`);
             setActiveComponent({ title, description, code });
 
             conversationLog.current.push({
@@ -176,6 +183,7 @@ export default function Chat() {
         }
       }
     } catch (err) {
+      console.error("[Chat] Error:", err instanceof Error ? err.message : err);
       setMessages((prev) => [
         ...prev,
         createAssistantMessage(

@@ -4,6 +4,9 @@ import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import type { CustomInputComponent } from "@/types/chat";
 import { createRenderMessage, isSandboxMessage } from "@/lib/sandbox";
 
+const MAX_IFRAME_HEIGHT = 500;
+const MIN_IFRAME_HEIGHT = 100;
+
 interface CustomInputPanelProps {
   component: CustomInputComponent;
   onSubmit: (data: unknown) => void;
@@ -30,9 +33,15 @@ export default function CustomInputPanel({
     (event: MessageEvent) => {
       if (!isSandboxMessage(event.data)) return;
       if (event.data.type === "submit") {
+        console.log("[CustomInputPanel] Submit received:", typeof event.data.data);
         onSubmit(event.data.data);
       } else if (event.data.type === "resize") {
-        setHeight(Math.max(100, Math.min(600, event.data.height + 16)));
+        const reportedHeight = event.data.height;
+        const capped = Math.max(MIN_IFRAME_HEIGHT, Math.min(MAX_IFRAME_HEIGHT, reportedHeight + 16));
+        if (reportedHeight > MAX_IFRAME_HEIGHT) {
+          console.log(`[CustomInputPanel] Content height ${reportedHeight}px exceeds max ${MAX_IFRAME_HEIGHT}px, scrolling enabled`);
+        }
+        setHeight(capped);
       }
     },
     [onSubmit]
@@ -50,25 +59,26 @@ export default function CustomInputPanel({
 
     function sendCode() {
       try {
+        console.log(`[CustomInputPanel] Rendering "${component.title}" (${component.code.length} chars)`);
         iframe!.contentWindow?.postMessage(
           createRenderMessage(component.code),
           "*"
         );
         setError(null);
       } catch (e) {
-        setError(
-          e instanceof Error ? e.message : "Failed to render component"
-        );
+        const msg = e instanceof Error ? e.message : "Failed to render component";
+        console.error("[CustomInputPanel] Render error:", msg);
+        setError(msg);
       }
     }
 
     iframe.addEventListener("load", sendCode, { once: true });
     return () => iframe.removeEventListener("load", sendCode);
-  }, [component.code, iframeKey]);
+  }, [component.code, component.title, iframeKey]);
 
   return (
-    <div className="mx-3 mb-2 border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900">
-      <div className="px-3 py-1.5 bg-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+    <div className="mx-3 mb-2 border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900 flex flex-col shrink-0" style={{ maxHeight: `${MAX_IFRAME_HEIGHT + 40}px` }}>
+      <div className="px-3 py-1.5 bg-zinc-800 text-xs text-zinc-400 flex items-center justify-between shrink-0">
         <span>{component.title}</span>
         <span className="text-zinc-600">{component.description}</span>
       </div>
