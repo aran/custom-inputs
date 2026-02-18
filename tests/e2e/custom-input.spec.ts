@@ -331,4 +331,85 @@ test.describe("Custom input panel", () => {
     // Component should still be there
     await expect(page.getByText("Persistent Input")).toBeVisible();
   });
+
+  test("shows building indicator while tool_use block is being generated", async ({ page }) => {
+    // Use a real HTTP server to send chunked SSE with controlled timing.
+    // Playwright's route.fulfill sends everything at once — no way to test
+    // intermediate streaming states without actual chunked delivery.
+    const { createServer } = await import("http");
+
+    const textEvents = [
+      { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+      { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Let me build " } },
+      { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "that for you!" } },
+      { type: "content_block_stop", index: 0 },
+      { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "tool_1", name: "create_input_component" } },
+    ];
+
+    const messageComplete = {
+      type: "message_complete",
+      message: {
+        content: [
+          { type: "text", text: "Let me build that for you!" },
+          {
+            type: "tool_use",
+            id: "tool_1",
+            name: "create_input_component",
+            input: {
+              title: "Test Component",
+              description: "A test",
+              code: "<div class='p-4'><button onclick='window.submitInput(1)'>Go</button></div>",
+            },
+          },
+        ],
+      },
+    };
+
+    const server = createServer((_req, res) => {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      });
+      // Send text events + tool_use start immediately
+      for (const event of textEvents) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+      // Delay 1.5s before sending message_complete (simulates tool construction)
+      setTimeout(() => {
+        res.write(`data: ${JSON.stringify(messageComplete)}\n\n`);
+        res.write(`data: [DONE]\n\n`);
+        res.end();
+      }, 1500);
+    });
+
+    const serverPort: number = await new Promise((resolve) => {
+      server.listen(0, () => {
+        resolve((server.address() as import("net").AddressInfo).port);
+      });
+    });
+
+    // Redirect /api/chat to our test server for chunked streaming
+    await page.route("/api/chat", (route) => {
+      route.continue({ url: `http://localhost:${serverPort}/api/chat` });
+    });
+
+    await page.goto("/");
+    await page.getByPlaceholder("sk-ant-...").fill("sk-ant-test-key");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await page.locator("textarea").fill("make me a component");
+    await page.getByRole("button", { name: "Send" }).click();
+
+    // The streaming text should appear
+    await expect(page.getByText("Let me build that for you!")).toBeVisible({ timeout: 5000 });
+
+    // While the tool_use block is being generated, a "building" indicator should appear
+    await expect(page.getByText("Building component")).toBeVisible({ timeout: 3000 });
+
+    // Eventually the component should render
+    await expect(page.getByText("Test Component")).toBeVisible({ timeout: 10000 });
+
+    server.close();
+  });
 });

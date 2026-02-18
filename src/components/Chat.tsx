@@ -58,6 +58,7 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeComponent, setActiveComponent] =
     useState<CustomInputComponent | null>(null);
+  const [isBuildingComponent, setIsBuildingComponent] = useState(false);
 
   const conversationLog = useRef<ConversationEntry[]>([]);
 
@@ -123,6 +124,12 @@ export default function Chat() {
             try {
               const event = JSON.parse(data);
               if (
+                event.type === "content_block_start" &&
+                event.content_block?.type === "tool_use"
+              ) {
+                console.log("[Chat] Tool use block started:", event.content_block.name);
+                setIsBuildingComponent(true);
+              } else if (
                 event.type === "content_block_delta" &&
                 event.delta?.type === "text_delta"
               ) {
@@ -172,6 +179,7 @@ export default function Chat() {
               code: string;
             };
             console.log(`[Chat] Tool call: create_input_component "${title}" (${code.length} chars)`);
+            setIsBuildingComponent(false);
             setActiveComponent({ title, description, code });
 
             conversationLog.current.push({
@@ -192,6 +200,7 @@ export default function Chat() {
       ]);
     } finally {
       setIsLoading(false);
+      setIsBuildingComponent(false);
       setStreamingContent("");
     }
   }
@@ -224,7 +233,7 @@ export default function Chat() {
       </header>
 
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full min-h-0">
-        <MessageList messages={messages} streamingContent={streamingContent} isLoading={isLoading} />
+        <MessageList messages={messages} streamingContent={streamingContent} isLoading={isLoading} isBuildingComponent={isBuildingComponent} />
 
         {!apiKey && messages.length === 0 && (
           <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm px-4 text-center">
