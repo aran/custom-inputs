@@ -107,30 +107,35 @@ export default function Chat() {
         if (done) break;
 
         accumulated += decoder.decode(value, { stream: true });
-        const lines = accumulated.split("\n");
-        accumulated = lines.pop() || "";
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
-          if (data === "[DONE]") continue;
+        // SSE events are separated by double newlines
+        const parts = accumulated.split("\n\n");
+        // Keep the last part as it may be incomplete
+        accumulated = parts.pop() || "";
 
-          try {
-            const event = JSON.parse(data);
-            if (
-              event.type === "content_block_delta" &&
-              event.delta?.type === "text_delta"
-            ) {
-              fullText += event.delta.text;
-              setStreamingContent(fullText);
-            } else if (event.type === "message_complete") {
-              finalMessage = event.message;
-            } else if (event.type === "error") {
-              throw new Error(event.error);
+        for (const part of parts) {
+          for (const line of part.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const event = JSON.parse(data);
+              if (
+                event.type === "content_block_delta" &&
+                event.delta?.type === "text_delta"
+              ) {
+                fullText += event.delta.text;
+                setStreamingContent(fullText);
+              } else if (event.type === "message_complete") {
+                finalMessage = event.message;
+              } else if (event.type === "error") {
+                throw new Error(event.error);
+              }
+            } catch (e) {
+              if (e instanceof SyntaxError) continue;
+              throw e;
             }
-          } catch (e) {
-            if (e instanceof SyntaxError) continue;
-            throw e;
           }
         }
       }
