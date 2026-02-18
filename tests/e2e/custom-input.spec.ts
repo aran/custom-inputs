@@ -185,8 +185,8 @@ test.describe("Custom input panel", () => {
     const frame = iframe.contentFrame();
     await frame.locator("#submit-btn").click();
 
-    // The custom input data should appear as a formatted message
-    await expect(page.getByText("Simple Input")).toBeVisible();
+    // The custom input data should appear as a formatted message in the chat bubble
+    await expect(page.locator(".bg-blue-600").getByText("Simple Input")).toBeVisible();
 
     // Claude's response to the data should appear
     await expect(page.getByText("Got your submission: 42!")).toBeVisible();

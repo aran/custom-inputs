@@ -16,6 +16,8 @@ export default function CustomInputPanel({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(200);
   const [error, setError] = useState<string | null>(null);
+  // Increment to force iframe remount when code changes
+  const [iframeKey, setIframeKey] = useState(0);
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -34,6 +36,16 @@ export default function CustomInputPanel({
     return () => window.removeEventListener("message", handleMessage);
   }, [handleMessage]);
 
+  // When code changes, remount the iframe so we get a fresh load event
+  const codeRef = useRef(component.code);
+  useEffect(() => {
+    if (codeRef.current !== component.code) {
+      codeRef.current = component.code;
+      setIframeKey((k) => k + 1);
+    }
+  }, [component.code]);
+
+  // Send code when iframe loads
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
@@ -46,17 +58,15 @@ export default function CustomInputPanel({
         );
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to render component");
+        setError(
+          e instanceof Error ? e.message : "Failed to render component"
+        );
       }
     }
 
-    // If iframe is already loaded, send immediately; otherwise wait
-    if (iframe.contentDocument?.readyState === "complete") {
-      sendCode();
-    } else {
-      iframe.addEventListener("load", sendCode, { once: true });
-    }
-  }, [component.code]);
+    iframe.addEventListener("load", sendCode, { once: true });
+    return () => iframe.removeEventListener("load", sendCode);
+  }, [component.code, iframeKey]);
 
   return (
     <div className="mx-3 mb-2 border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900">
@@ -68,6 +78,7 @@ export default function CustomInputPanel({
         <div className="p-3 text-sm text-red-400">{error}</div>
       ) : (
         <iframe
+          key={iframeKey}
           ref={iframeRef}
           src="/sandbox.html"
           sandbox="allow-scripts"
