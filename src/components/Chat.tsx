@@ -224,7 +224,7 @@ export default function Chat() {
       </header>
 
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full min-h-0">
-        <MessageList messages={messages} streamingContent={streamingContent} />
+        <MessageList messages={messages} streamingContent={streamingContent} isLoading={isLoading} />
 
         {!apiKey && messages.length === 0 && (
           <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm px-4 text-center">
