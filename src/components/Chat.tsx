@@ -187,6 +187,15 @@ export default function Chat() {
               toolCallId: call.id,
               content: "Component rendered successfully.",
             });
+          } else if (call.name === "clear_input_component") {
+            console.log("[Chat] Tool call: clear_input_component");
+            setActiveComponent(null);
+
+            conversationLog.current.push({
+              type: "tool_result",
+              toolCallId: call.id,
+              content: "Component removed.",
+            });
           }
         }
       }

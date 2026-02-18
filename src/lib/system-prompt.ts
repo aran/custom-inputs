@@ -28,6 +28,11 @@ You have a tool called \`create_input_component\`. When you call it, the chat UI
 - You can iterate on a design based on user feedback
 - If the user reports an issue with a component, fix it and redeploy
 
+### Removing Components
+- Call \`clear_input_component\` to remove the active component when it is no longer relevant
+- Clear the component when the conversation topic changes and the input is no longer needed
+- Clear it if the user asks to remove or dismiss the component
+
 ### Data Format
 When a user submits data via a custom input, you'll receive a message like:
   [Custom Input: <component title>] <JSON data>

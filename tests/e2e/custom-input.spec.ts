@@ -332,6 +332,80 @@ test.describe("Custom input panel", () => {
     await expect(page.getByText("Persistent Input")).toBeVisible();
   });
 
+  test("clear_input_component tool call removes the active component", async ({ page }) => {
+    let callCount = 0;
+    await page.route("/api/chat", async (route) => {
+      callCount++;
+      if (callCount === 1) {
+        // First response: create a component
+        const mockResponse = {
+          type: "message_complete",
+          message: {
+            content: [
+              { type: "text", text: "Here's a tracker!" },
+              {
+                type: "tool_use",
+                id: "tool_1",
+                name: "create_input_component",
+                input: {
+                  title: "Removable Tracker",
+                  description: "Will be cleared",
+                  code: "<div class='p-4'>Track stuff</div>",
+                },
+              },
+            ],
+          },
+        };
+        await route.fulfill({
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+        });
+      } else {
+        // Second response: clear the component
+        const mockResponse = {
+          type: "message_complete",
+          message: {
+            content: [
+              { type: "text", text: "Got it, I've removed the tracker." },
+              {
+                type: "tool_use",
+                id: "tool_2",
+                name: "clear_input_component",
+                input: {},
+              },
+            ],
+          },
+        };
+        await route.fulfill({
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+        });
+      }
+    });
+
+    await page.goto("/");
+    await page.getByPlaceholder("sk-ant-...").fill("sk-ant-test-key");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    // Create component
+    await page.locator("textarea").fill("make me a tracker");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText("Removable Tracker")).toBeVisible();
+    const iframe = page.locator("iframe");
+    await expect(iframe).toBeVisible();
+
+    // Ask to clear it
+    await page.locator("textarea").fill("never mind, remove it");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText("I've removed the tracker")).toBeVisible();
+
+    // Component should be gone
+    await expect(iframe).not.toBeVisible();
+    await expect(page.getByText("Removable Tracker")).not.toBeVisible();
+  });
+
   test("shows building indicator while tool_use block is being generated", async ({ page }) => {
     // Use a real HTTP server to send chunked SSE with controlled timing.
     // Playwright's route.fulfill sends everything at once — no way to test

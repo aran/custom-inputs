@@ -32,6 +32,17 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ["title", "description", "code"],
     },
   },
+  {
+    name: "clear_input_component",
+    description:
+      "Remove the currently active custom input component. " +
+      "Use this when the component is no longer relevant to the conversation.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 export interface ChatRequestOptions {

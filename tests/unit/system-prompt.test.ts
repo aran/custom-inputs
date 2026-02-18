@@ -51,4 +51,14 @@ describe("System prompt construction", () => {
     expect(prompt).toContain("create_input_component");
     expect(prompt).toContain("replace");
   });
+
+  it("documents clear_input_component tool", () => {
+    const prompt = buildSystemPrompt(null);
+    expect(prompt).toContain("clear_input_component");
+  });
+
+  it("encourages clearing component when no longer relevant", () => {
+    const prompt = buildSystemPrompt(null);
+    expect(prompt).toMatch(/clear.*no longer relevant|remove.*no longer needed/i);
+  });
 });
