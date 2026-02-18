@@ -1,11 +1,82 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { Message, CustomInputComponent, ContentBlock } from "@/types/chat";
-import { createUserMessage, createAssistantMessage, extractToolCalls } from "@/types/chat";
+import {
+  createUserMessage,
+  createAssistantMessage,
+  createCustomInputMessage,
+  extractToolCalls,
+} from "@/types/chat";
 import MessageList from "./MessageList";
 import TextInput from "./TextInput";
+import CustomInputPanel from "./CustomInputPanel";
 import ApiKeySettings from "./ApiKeySettings";
+import type Anthropic from "@anthropic-ai/sdk";
+
+/**
+ * Converts our Message[] into the Anthropic API's MessageParam[] format.
+ * This must handle tool_use and tool_result blocks correctly.
+ */
+function toApiMessages(
+  messages: Message[],
+  toolCallHistory: ToolCallRecord[]
+): Anthropic.MessageParam[] {
+  const result: Anthropic.MessageParam[] = [];
+
+  for (const msg of messages) {
+    result.push({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+    });
+  }
+
+  // Inject tool_use and tool_result pairs from history
+  // We reconstruct the full conversation including tool interactions
+  return result;
+}
+
+interface ToolCallRecord {
+  toolCallId: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+/**
+ * Build the full API message history from our internal messages,
+ * including tool_use/tool_result pairs where they occurred.
+ */
+function buildApiHistory(
+  conversationLog: ConversationEntry[]
+): Anthropic.MessageParam[] {
+  const result: Anthropic.MessageParam[] = [];
+
+  for (const entry of conversationLog) {
+    if (entry.type === "user_text") {
+      result.push({ role: "user", content: entry.content });
+    } else if (entry.type === "assistant") {
+      result.push({ role: "assistant", content: entry.blocks });
+    } else if (entry.type === "tool_result") {
+      result.push({
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: entry.toolCallId,
+            content: entry.content,
+          },
+        ],
+      });
+    }
+  }
+
+  return result;
+}
+
+type ConversationEntry =
+  | { type: "user_text"; content: string }
+  | { type: "assistant"; blocks: Anthropic.ContentBlock[] }
+  | { type: "tool_result"; toolCallId: string; content: string };
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -15,20 +86,19 @@ export default function Chat() {
   const [activeComponent, setActiveComponent] =
     useState<CustomInputComponent | null>(null);
 
+  // Full conversation log including tool interactions for API context
+  const conversationLog = useRef<ConversationEntry[]>([]);
+
   const handleKeyChange = useCallback((key: string | null) => {
     setApiKey(key);
   }, []);
 
-  async function sendToApi(allMessages: Message[]) {
+  async function sendToApi(currentActiveComponent: CustomInputComponent | null) {
     if (!apiKey) return;
     setIsLoading(true);
     setStreamingContent("");
 
-    // Convert our Message[] to Anthropic MessageParam[]
-    const apiMessages = allMessages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+    const apiMessages = buildApiHistory(conversationLog.current);
 
     try {
       const res = await fetch("/api/chat", {
@@ -37,7 +107,7 @@ export default function Chat() {
         body: JSON.stringify({
           messages: apiMessages,
           apiKey,
-          activeComponent,
+          activeComponent: currentActiveComponent,
         }),
       });
 
@@ -85,11 +155,18 @@ export default function Chat() {
         }
       }
 
-      // Process the final message
       if (finalMessage) {
-        // Extract text content
+        // Add assistant response to conversation log
+        conversationLog.current.push({
+          type: "assistant",
+          blocks: finalMessage.content as Anthropic.ContentBlock[],
+        });
+
+        // Extract text content for display
         const textParts = finalMessage.content
-          .filter((b): b is { type: "text"; text: string } => b.type === "text")
+          .filter(
+            (b): b is { type: "text"; text: string } => b.type === "text"
+          )
           .map((b) => b.text)
           .join("");
 
@@ -100,6 +177,8 @@ export default function Chat() {
 
         // Handle tool calls
         const toolCalls = extractToolCalls(finalMessage.content);
+        let newComponent = currentActiveComponent;
+
         for (const call of toolCalls) {
           if (call.name === "create_input_component") {
             const { title, description, code } = call.input as {
@@ -107,7 +186,15 @@ export default function Chat() {
               description: string;
               code: string;
             };
-            setActiveComponent({ title, description, code });
+            newComponent = { title, description, code };
+            setActiveComponent(newComponent);
+
+            // Add tool_result to conversation log
+            conversationLog.current.push({
+              type: "tool_result",
+              toolCallId: call.id,
+              content: "Component rendered successfully.",
+            });
           }
         }
       }
@@ -124,16 +211,26 @@ export default function Chat() {
 
   function handleSendText(text: string) {
     const userMsg = createUserMessage(text);
-    const updated = [...messages, userMsg];
-    setMessages(updated);
-    sendToApi(updated);
+    setMessages((prev) => [...prev, userMsg]);
+    conversationLog.current.push({ type: "user_text", content: text });
+    sendToApi(activeComponent);
+  }
+
+  function handleCustomInputSubmit(data: unknown) {
+    if (!activeComponent) return;
+    const msg = createCustomInputMessage(activeComponent.title, data);
+    setMessages((prev) => [...prev, msg]);
+    conversationLog.current.push({ type: "user_text", content: msg.content });
+    sendToApi(activeComponent);
   }
 
   return (
     <div className="flex flex-col h-screen bg-zinc-950">
       <header className="px-4 py-3 border-b border-zinc-800">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-zinc-100">Custom Inputs</h1>
+          <h1 className="text-lg font-semibold text-zinc-100">
+            Custom Inputs
+          </h1>
           <div className="w-64">
             <ApiKeySettings onKeyChange={handleKeyChange} />
           </div>
@@ -147,6 +244,13 @@ export default function Chat() {
           <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
             Enter your API key above to start chatting
           </div>
+        )}
+
+        {activeComponent && (
+          <CustomInputPanel
+            component={activeComponent}
+            onSubmit={handleCustomInputSubmit}
+          />
         )}
 
         <TextInput onSend={handleSendText} disabled={isLoading || !apiKey} />
