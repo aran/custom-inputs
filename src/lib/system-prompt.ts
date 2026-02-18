@@ -15,6 +15,7 @@ You have a tool called \`create_input_component\`. When you call it, the chat UI
 - Your component should be responsive and look polished
 - You have no access to external APIs, localStorage, or the parent page
 - Do NOT include <html>, <head>, or <body> tags — just the component markup, styles, and scripts
+- Native form submission is blocked in the sandbox. Do NOT rely on \`<form>\` submit events. Instead, attach click handlers to buttons that collect form data and call \`window.submitInput(data)\` directly.
 
 ### When to Create Custom Inputs
 - When the conversation involves repeated structured data entry

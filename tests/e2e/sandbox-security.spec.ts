@@ -61,6 +61,85 @@ test.describe("Sandbox security", () => {
     await expect(page.locator("#security-ok")).toBeVisible();
   });
 
+  test("form submission is intercepted and does not block submitInput", async ({ page }) => {
+    await page.goto("/sandbox.html");
+
+    // Render a <form> with a submit button — the pattern Claude often generates
+    await page.evaluate(() => {
+      window.postMessage({
+        type: "render",
+        code: `
+          <form id="test-form">
+            <input id="name" type="text" value="Squat" />
+            <button type="submit" id="submit-btn">Submit</button>
+          </form>
+          <script>
+            document.getElementById('test-form').addEventListener('submit', function(e) {
+              e.preventDefault();
+              var name = document.getElementById('name').value;
+              window.submitInput({ exercise: name });
+            });
+          </script>
+        `,
+      }, "*");
+    });
+    await page.waitForSelector("#submit-btn");
+
+    // Listen for the submit postMessage
+    const submitPromise = page.evaluate(() => {
+      return new Promise<unknown>((resolve) => {
+        window.addEventListener("message", (e) => {
+          if (e.data?.type === "submit") resolve(e.data.data);
+        });
+      });
+    });
+
+    await page.click("#submit-btn");
+    const data = await submitPromise;
+    expect(data).toEqual({ exercise: "Squat" });
+  });
+
+  test("form submit without preventDefault still calls submitInput via global handler", async ({ page }) => {
+    await page.goto("/sandbox.html");
+
+    // Render a form where the component does NOT call preventDefault
+    // (the sandbox's global handler should catch it)
+    await page.evaluate(() => {
+      window.postMessage({
+        type: "render",
+        code: `
+          <form id="test-form">
+            <input id="val" type="text" value="135" />
+            <button type="submit" id="submit-btn">Log</button>
+          </form>
+          <script>
+            document.getElementById('submit-btn').addEventListener('click', function() {
+              var val = document.getElementById('val').value;
+              window.submitInput({ weight: Number(val) });
+            });
+          </script>
+        `,
+      }, "*");
+    });
+    await page.waitForSelector("#submit-btn");
+
+    const submitPromise = page.evaluate(() => {
+      return new Promise<unknown>((resolve) => {
+        window.addEventListener("message", (e) => {
+          if (e.data?.type === "submit") resolve(e.data.data);
+        });
+      });
+    });
+
+    // Should NOT navigate or error — global handler prevents form submission
+    await page.click("#submit-btn");
+    const data = await submitPromise;
+    expect(data).toEqual({ weight: 135 });
+
+    // Page should still be on sandbox.html (no navigation occurred)
+    expect(page.url()).toContain("sandbox.html");
+  });
+
   test("Tailwind CSS is available in sandbox", async ({ page }) => {
     await page.goto("/sandbox.html");
     await page.evaluate(() => {

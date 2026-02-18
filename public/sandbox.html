@@ -39,6 +39,12 @@
       parent.postMessage({ type: 'submit', data: data }, '*');
     };
 
+    // Prevent native form submissions (blocked by sandbox anyway).
+    // This ensures forms work via submitInput() instead of failing silently.
+    document.addEventListener('submit', function(e) {
+      e.preventDefault();
+    });
+
     // Report height changes via ResizeObserver
     var observer = new ResizeObserver(function(entries) {
       for (var entry of entries) {
