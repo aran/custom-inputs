@@ -13,9 +13,9 @@ function PrivacyTooltip() {
       <span className="w-4 h-4 flex items-center justify-center rounded-full border border-zinc-600 text-zinc-500 text-[10px] leading-none cursor-help">
         ?
       </span>
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 px-3 py-2 bg-zinc-700 text-zinc-200 text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none z-10">
+      <span className="absolute top-full right-0 mt-2 w-52 px-3 py-2 bg-zinc-700 text-zinc-200 text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none z-10">
         Your key is stored in your browser&apos;s local storage only. It is never sent to our servers — it goes directly from your browser to the Anthropic API.
-        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-700" />
+        <span className="absolute bottom-full right-3 border-4 border-transparent border-b-zinc-700" />
       </span>
     </span>
   );
