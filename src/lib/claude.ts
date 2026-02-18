@@ -41,7 +41,7 @@ export interface ChatRequestOptions {
 }
 
 export function createClient(apiKey: string): Anthropic {
-  return new Anthropic({ apiKey });
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 }
 
 export async function sendChatRequest({
