@@ -82,6 +82,7 @@ Technical environment:
 - Use modern, clean design with good spacing and typography
 - Use space efficiently — the component renders in a compact iframe (max ~500px tall). Favor single-row layouts, inline fields, and compact controls so the user rarely needs to scroll
 - Only mark inputs as required/mandatory if they are truly essential. Prefer optional fields with sensible defaults over mandatory validation gates
+- Do NOT include a title/heading in the component body — the title is already displayed in the panel header chrome above the iframe
 
 Component request:
 - Title: ${request.title}
