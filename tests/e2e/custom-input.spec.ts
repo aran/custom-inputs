@@ -1,27 +1,70 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * Helper: Build mock SSE body for the two-stage component flow.
+ * Sends component_created event, then message_complete with request_input_component.
+ */
+function buildComponentResponse(opts: {
+  text: string;
+  toolId: string;
+  title: string;
+  description: string;
+  code: string;
+  requirements?: string;
+  persistent?: boolean;
+}): string {
+  const componentCreated = {
+    type: "component_created",
+    component: {
+      title: opts.title,
+      description: opts.description,
+      code: opts.code,
+      persistent: opts.persistent ?? false,
+    },
+    toolCallId: opts.toolId,
+  };
+
+  const messageComplete = {
+    type: "message_complete",
+    message: {
+      content: [
+        { type: "text", text: opts.text },
+        {
+          type: "tool_use",
+          id: opts.toolId,
+          name: "request_input_component",
+          input: {
+            title: opts.title,
+            description: opts.description,
+            requirements: opts.requirements ?? "Mock requirements",
+            persistent: opts.persistent ?? false,
+          },
+        },
+      ],
+    },
+  };
+
+  return (
+    `data: ${JSON.stringify(componentCreated)}\n\n` +
+    `data: ${JSON.stringify(messageComplete)}\n\n` +
+    `data: [DONE]\n\n`
+  );
+}
+
 test.describe("Custom input panel", () => {
   test("mock API tool call makes custom input panel appear", async ({
     page,
   }) => {
-    // Intercept the chat API to return a mock tool call response
     await page.route("/api/chat", async (route) => {
-      const mockResponse = {
-        type: "message_complete",
-        message: {
-          content: [
-            {
-              type: "text",
-              text: "I've created a workout tracker for you!",
-            },
-            {
-              type: "tool_use",
-              id: "tool_123",
-              name: "create_input_component",
-              input: {
-                title: "Set Tracker",
-                description: "Track your workout sets",
-                code: `<div class="p-4 space-y-3">
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+        body: buildComponentResponse({
+          text: "I've created a workout tracker for you!",
+          toolId: "tool_123",
+          title: "Set Tracker",
+          description: "Track your workout sets",
+          code: `<div class="p-4 space-y-3">
                   <h2 class="text-lg font-bold">Log a Set</h2>
                   <select id="exercise" class="border rounded p-2 w-full">
                     <option>Squat</option>
@@ -38,18 +81,7 @@ test.describe("Custom input panel", () => {
                     Log Set
                   </button>
                 </div>`,
-              },
-            },
-          ],
-        },
-      };
-
-      const body = `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`;
-
-      await route.fulfill({
-        status: 200,
-        headers: { "Content-Type": "text/event-stream" },
-        body,
+        }),
       });
     });
 
@@ -83,29 +115,16 @@ test.describe("Custom input panel", () => {
     page,
   }) => {
     await page.route("/api/chat", async (route) => {
-      const mockResponse = {
-        type: "message_complete",
-        message: {
-          content: [
-            { type: "text", text: "Here's a tracker!" },
-            {
-              type: "tool_use",
-              id: "tool_1",
-              name: "create_input_component",
-              input: {
-                title: "Test Input",
-                description: "Test",
-                code: '<button onclick="window.submitInput(42)">Submit</button>',
-              },
-            },
-          ],
-        },
-      };
-
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "text/event-stream" },
-        body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+        body: buildComponentResponse({
+          text: "Here's a tracker!",
+          toolId: "tool_1",
+          title: "Test Input",
+          description: "Test",
+          code: '<button onclick="window.submitInput(42)">Submit</button>',
+        }),
       });
     });
 
@@ -128,29 +147,18 @@ test.describe("Custom input panel", () => {
     await page.route("/api/chat", async (route) => {
       callCount++;
       if (callCount === 1) {
-        // First call: return a component
-        const mockResponse = {
-          type: "message_complete",
-          message: {
-            content: [
-              { type: "text", text: "Here's your tracker!" },
-              {
-                type: "tool_use",
-                id: "tool_1",
-                name: "create_input_component",
-                input: {
-                  title: "Simple Input",
-                  description: "Test",
-                  code: '<div><button id="submit-btn" onclick="window.submitInput({value: 42})">Submit 42</button></div>',
-                },
-              },
-            ],
-          },
-        };
+        // First call: return a component (persistent so it stays after submit)
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Here's your tracker!",
+            toolId: "tool_1",
+            title: "Simple Input",
+            description: "Test",
+            code: '<div><button id="submit-btn" onclick="window.submitInput({value: 42})">Submit 42</button></div>',
+            persistent: true,
+          }),
         });
       } else {
         // Second call: Claude responds to the submitted data
@@ -199,52 +207,28 @@ test.describe("Custom input panel", () => {
     await page.route("/api/chat", async (route) => {
       callCount++;
       if (callCount === 1) {
-        const mockResponse = {
-          type: "message_complete",
-          message: {
-            content: [
-              { type: "text", text: "First component!" },
-              {
-                type: "tool_use",
-                id: "tool_1",
-                name: "create_input_component",
-                input: {
-                  title: "Component A",
-                  description: "First",
-                  code: "<div>Component A content</div>",
-                },
-              },
-            ],
-          },
-        };
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "First component!",
+            toolId: "tool_1",
+            title: "Component A",
+            description: "First",
+            code: "<div>Component A content</div>",
+          }),
         });
       } else {
-        const mockResponse = {
-          type: "message_complete",
-          message: {
-            content: [
-              { type: "text", text: "Replaced!" },
-              {
-                type: "tool_use",
-                id: "tool_2",
-                name: "create_input_component",
-                input: {
-                  title: "Component B",
-                  description: "Second",
-                  code: "<div>Component B content</div>",
-                },
-              },
-            ],
-          },
-        };
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Replaced!",
+            toolId: "tool_2",
+            title: "Component B",
+            description: "Second",
+            code: "<div>Component B content</div>",
+          }),
         });
       }
     });
@@ -273,28 +257,17 @@ test.describe("Custom input panel", () => {
     await page.route("/api/chat", async (route) => {
       callCount++;
       if (callCount === 1) {
-        const mockResponse = {
-          type: "message_complete",
-          message: {
-            content: [
-              { type: "text", text: "Here's your component!" },
-              {
-                type: "tool_use",
-                id: "tool_1",
-                name: "create_input_component",
-                input: {
-                  title: "Persistent Input",
-                  description: "Should stay",
-                  code: "<div>I should persist</div>",
-                },
-              },
-            ],
-          },
-        };
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Here's your component!",
+            toolId: "tool_1",
+            title: "Persistent Input",
+            description: "Should stay",
+            code: "<div>I should persist</div>",
+            persistent: true,
+          }),
         });
       } else {
         // Text-only response — no tool call
@@ -338,28 +311,16 @@ test.describe("Custom input panel", () => {
       callCount++;
       if (callCount === 1) {
         // First response: create a component
-        const mockResponse = {
-          type: "message_complete",
-          message: {
-            content: [
-              { type: "text", text: "Here's a tracker!" },
-              {
-                type: "tool_use",
-                id: "tool_1",
-                name: "create_input_component",
-                input: {
-                  title: "Removable Tracker",
-                  description: "Will be cleared",
-                  code: "<div class='p-4'>Track stuff</div>",
-                },
-              },
-            ],
-          },
-        };
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify(mockResponse)}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Here's a tracker!",
+            toolId: "tool_1",
+            title: "Removable Tracker",
+            description: "Will be cleared",
+            code: "<div class='p-4'>Track stuff</div>",
+          }),
         });
       } else {
         // Second response: clear the component
@@ -408,8 +369,6 @@ test.describe("Custom input panel", () => {
 
   test("shows building indicator while tool_use block is being generated", async ({ page }) => {
     // Use a real HTTP server to send chunked SSE with controlled timing.
-    // Playwright's route.fulfill sends everything at once — no way to test
-    // intermediate streaming states without actual chunked delivery.
     const { createServer } = await import("http");
 
     const textEvents = [
@@ -417,8 +376,19 @@ test.describe("Custom input panel", () => {
       { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Let me build " } },
       { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "that for you!" } },
       { type: "content_block_stop", index: 0 },
-      { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "tool_1", name: "create_input_component" } },
+      { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "tool_1", name: "request_input_component" } },
     ];
+
+    const componentCreated = {
+      type: "component_created",
+      component: {
+        title: "Test Component",
+        description: "A test",
+        code: "<div class='p-4'><button onclick='window.submitInput(1)'>Go</button></div>",
+        persistent: false,
+      },
+      toolCallId: "tool_1",
+    };
 
     const messageComplete = {
       type: "message_complete",
@@ -428,11 +398,11 @@ test.describe("Custom input panel", () => {
           {
             type: "tool_use",
             id: "tool_1",
-            name: "create_input_component",
+            name: "request_input_component",
             input: {
               title: "Test Component",
               description: "A test",
-              code: "<div class='p-4'><button onclick='window.submitInput(1)'>Go</button></div>",
+              requirements: "A simple test button",
             },
           },
         ],
@@ -449,8 +419,9 @@ test.describe("Custom input panel", () => {
       for (const event of textEvents) {
         res.write(`data: ${JSON.stringify(event)}\n\n`);
       }
-      // Delay 1.5s before sending message_complete (simulates tool construction)
+      // Delay 1.5s before sending component_created + message_complete (simulates Opus generation)
       setTimeout(() => {
+        res.write(`data: ${JSON.stringify(componentCreated)}\n\n`);
         res.write(`data: ${JSON.stringify(messageComplete)}\n\n`);
         res.write(`data: [DONE]\n\n`);
         res.end();

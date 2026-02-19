@@ -21,6 +21,7 @@ export interface CustomInputComponent {
   title: string;
   description: string;
   code: string;
+  persistent: boolean;
 }
 
 // ---- Content block types (matching Anthropic API response shape) ----

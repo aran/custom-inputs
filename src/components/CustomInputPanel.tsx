@@ -11,11 +11,15 @@ const MIN_IFRAME_HEIGHT = 100;
 interface CustomInputPanelProps {
   component: CustomInputComponent;
   onSubmit: (data: unknown) => void;
+  onClose: () => void;
+  isVisible: boolean;
 }
 
 export default function CustomInputPanel({
   component,
   onSubmit,
+  onClose,
+  isVisible,
 }: CustomInputPanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(200);
@@ -81,10 +85,26 @@ export default function CustomInputPanel({
   }, [component.code, component.title, iframeKey]);
 
   return (
-    <div className="mx-3 mb-2 border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900 flex flex-col shrink-0" style={{ maxHeight: `${MAX_IFRAME_HEIGHT + 40}px` }}>
+    <div
+      className={`mx-3 mb-2 border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900 flex flex-col shrink-0 transition-all duration-200 ease-out ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+      }`}
+      style={{ maxHeight: `${MAX_IFRAME_HEIGHT + 40}px` }}
+    >
       <div className="px-3 py-1.5 bg-zinc-800 text-xs text-zinc-400 flex items-center justify-between shrink-0">
         <span>{component.title}</span>
-        <span className="text-zinc-600">{component.description}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-zinc-600">{component.description}</span>
+          <button
+            onClick={onClose}
+            className="text-zinc-600 hover:text-zinc-300 transition-colors p-0.5 -mr-0.5"
+            aria-label="Close component"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
       {error ? (
         <div className="p-3 text-sm text-red-400">{error}</div>

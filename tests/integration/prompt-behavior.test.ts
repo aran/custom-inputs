@@ -36,7 +36,7 @@ function getToolUses(response: Anthropic.Message): Anthropic.ToolUseBlock[] {
 }
 
 describeApi("Prompt behavior — real Claude API", () => {
-  it("creates a component when user asks to track workouts", { timeout: 30000 }, async () => {
+  it("requests a component when user asks to track workouts", { timeout: 30000 }, async () => {
     const response = await sendChatRequest({
       apiKey: API_KEY!,
       messages: [
@@ -48,16 +48,15 @@ describeApi("Prompt behavior — real Claude API", () => {
     const toolUses = getToolUses(response);
     expect(toolUses.length).toBeGreaterThanOrEqual(1);
 
-    const createCall = toolUses.find((t) => t.name === "create_input_component");
-    expect(createCall).toBeDefined();
+    const requestCall = toolUses.find((t) => t.name === "request_input_component");
+    expect(requestCall).toBeDefined();
 
-    const input = createCall!.input as Record<string, string>;
+    const input = requestCall!.input as Record<string, string>;
     expect(input.title).toBeDefined();
-    expect(input.code).toBeDefined();
-    expect(input.code).toContain("submitInput");
+    expect(input.requirements).toBeDefined();
   });
 
-  it("generated code is self-contained HTML with submitInput", { timeout: 30000 }, async () => {
+  it("request includes descriptive requirements", { timeout: 30000 }, async () => {
     const response = await sendChatRequest({
       apiKey: API_KEY!,
       messages: [
@@ -67,13 +66,12 @@ describeApi("Prompt behavior — real Claude API", () => {
     });
 
     const toolUses = getToolUses(response);
-    const createCall = toolUses.find((t) => t.name === "create_input_component");
-    expect(createCall).toBeDefined();
+    const requestCall = toolUses.find((t) => t.name === "request_input_component");
+    expect(requestCall).toBeDefined();
 
-    const code = (createCall!.input as Record<string, string>).code;
-    expect(code).toContain("submitInput");
-    expect(code).toMatch(/<(input|button|select|textarea|range)/i);
-    expect(code).toMatch(/class="[^"]*(?:bg-|text-|p-|m-|flex|grid|rounded)/);
+    const input = requestCall!.input as Record<string, string>;
+    expect(input.requirements).toBeDefined();
+    expect(input.requirements.length).toBeGreaterThan(10);
   });
 
   it("responds meaningfully to custom input data", { timeout: 30000 }, async () => {
@@ -95,11 +93,11 @@ describeApi("Prompt behavior — real Claude API", () => {
             {
               type: "tool_use",
               id: "tool_1",
-              name: "create_input_component",
+              name: "request_input_component",
               input: {
                 title: "Set Tracker",
                 description: "Track workout sets",
-                code: "<div>tracker</div>",
+                requirements: "Exercise selector, weight, reps, RPE fields",
               },
             },
           ],
@@ -110,7 +108,7 @@ describeApi("Prompt behavior — real Claude API", () => {
             {
               type: "tool_result",
               tool_use_id: "tool_1",
-              content: "Component rendered successfully.",
+              content: "Component generated and displayed to user.",
             },
           ],
         },
@@ -123,6 +121,7 @@ describeApi("Prompt behavior — real Claude API", () => {
         title: "Set Tracker",
         description: "Track workout sets",
         code: "<div>tracker</div>",
+        persistent: false,
       },
     });
 
@@ -135,7 +134,7 @@ describeApi("Prompt behavior — real Claude API", () => {
     ).toBe(true);
   });
 
-  it("modifies a component when asked to add a field", { timeout: 30000 }, async () => {
+  it("requests a modified component when asked to add a field", { timeout: 30000 }, async () => {
     const existingComponent: CustomInputComponent = {
       title: "Set Tracker",
       description: "Track workout sets",
@@ -145,6 +144,7 @@ describeApi("Prompt behavior — real Claude API", () => {
   <input type="number" id="reps" placeholder="Reps">
   <button onclick="window.submitInput({exercise: document.getElementById('exercise').value, weight: Number(document.getElementById('weight').value), reps: Number(document.getElementById('reps').value)})">Log Set</button>
 </div>`,
+      persistent: false,
     };
 
     const response = await sendChatRequest({
@@ -158,8 +158,12 @@ describeApi("Prompt behavior — real Claude API", () => {
             {
               type: "tool_use",
               id: "tool_1",
-              name: "create_input_component",
-              input: existingComponent,
+              name: "request_input_component",
+              input: {
+                title: "Set Tracker",
+                description: "Track workout sets",
+                requirements: "Exercise selector, weight, reps fields",
+              },
             },
           ],
         },
@@ -169,7 +173,7 @@ describeApi("Prompt behavior — real Claude API", () => {
             {
               type: "tool_result",
               tool_use_id: "tool_1",
-              content: "Component rendered successfully.",
+              content: "Component generated and displayed to user.",
             },
           ],
         },
@@ -182,12 +186,11 @@ describeApi("Prompt behavior — real Claude API", () => {
     });
 
     const toolUses = getToolUses(response);
-    const createCall = toolUses.find((t) => t.name === "create_input_component");
-    expect(createCall).toBeDefined();
+    const requestCall = toolUses.find((t) => t.name === "request_input_component");
+    expect(requestCall).toBeDefined();
 
-    const code = (createCall!.input as Record<string, string>).code;
-    expect(code).toMatch(/note|textarea|text/i);
-    expect(code).toContain("submitInput");
+    const input = requestCall!.input as Record<string, string>;
+    expect(input.requirements).toMatch(/note/i);
   });
 
   it("responds with text only when no custom input is needed", { timeout: 30000 }, async () => {
@@ -204,7 +207,7 @@ describeApi("Prompt behavior — real Claude API", () => {
     expect(text).toContain("4");
   });
 
-  it("proactively creates a component for structured input scenarios", { timeout: 30000 }, async () => {
+  it("proactively requests a component for structured input scenarios", { timeout: 30000 }, async () => {
     const response = await sendChatRequest({
       apiKey: API_KEY!,
       messages: [
@@ -219,7 +222,7 @@ describeApi("Prompt behavior — real Claude API", () => {
 
     const toolUses = getToolUses(response);
     expect(toolUses.length).toBeGreaterThanOrEqual(1);
-    const createCall = toolUses.find((t) => t.name === "create_input_component");
-    expect(createCall).toBeDefined();
+    const requestCall = toolUses.find((t) => t.name === "request_input_component");
+    expect(requestCall).toBeDefined();
   });
 });

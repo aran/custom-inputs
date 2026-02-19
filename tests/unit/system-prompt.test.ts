@@ -5,8 +5,8 @@ import type { CustomInputComponent } from "@/types/chat";
 describe("System prompt construction", () => {
   it("includes tool usage instructions", () => {
     const prompt = buildSystemPrompt(null);
-    expect(prompt).toContain("create_input_component");
-    expect(prompt).toContain("window.submitInput");
+    expect(prompt).toContain("request_input_component");
+    expect(prompt).toContain("submitInput");
   });
 
   it("includes data format documentation", () => {
@@ -24,6 +24,7 @@ describe("System prompt construction", () => {
       title: "Set Tracker",
       description: "Track workout sets",
       code: '<div class="tracker"><button onclick="window.submitInput({reps:10})">Submit</button></div>',
+      persistent: false,
     };
     const prompt = buildSystemPrompt(component);
     expect(prompt).toContain("Set Tracker");
@@ -31,14 +32,16 @@ describe("System prompt construction", () => {
     expect(prompt).not.toContain("No custom input component is currently active");
   });
 
-  it("includes Tailwind CSS availability mention", () => {
+  it("documents persistent flag options", () => {
     const prompt = buildSystemPrompt(null);
-    expect(prompt).toContain("Tailwind");
+    expect(prompt).toContain("persistent: false");
+    expect(prompt).toContain("persistent: true");
   });
 
-  it("includes sandbox environment constraints", () => {
+  it("explains requirements field", () => {
     const prompt = buildSystemPrompt(null);
-    expect(prompt).toContain("sandboxed iframe");
+    expect(prompt).toContain("requirements");
+    expect(prompt).toContain("submitInput");
   });
 
   it("documents when to create custom inputs", () => {
@@ -48,7 +51,7 @@ describe("System prompt construction", () => {
 
   it("documents component modification capability", () => {
     const prompt = buildSystemPrompt(null);
-    expect(prompt).toContain("create_input_component");
+    expect(prompt).toContain("request_input_component");
     expect(prompt).toContain("replace");
   });
 

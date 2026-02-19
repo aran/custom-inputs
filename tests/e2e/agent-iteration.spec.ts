@@ -1,5 +1,55 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * Helper: Build mock SSE body for the two-stage component flow.
+ */
+function buildComponentResponse(opts: {
+  text: string;
+  toolId: string;
+  title: string;
+  description: string;
+  code: string;
+  requirements?: string;
+  persistent?: boolean;
+}): string {
+  const componentCreated = {
+    type: "component_created",
+    component: {
+      title: opts.title,
+      description: opts.description,
+      code: opts.code,
+      persistent: opts.persistent ?? false,
+    },
+    toolCallId: opts.toolId,
+  };
+
+  const messageComplete = {
+    type: "message_complete",
+    message: {
+      content: [
+        { type: "text", text: opts.text },
+        {
+          type: "tool_use",
+          id: opts.toolId,
+          name: "request_input_component",
+          input: {
+            title: opts.title,
+            description: opts.description,
+            requirements: opts.requirements ?? "Mock requirements",
+            persistent: opts.persistent ?? false,
+          },
+        },
+      ],
+    },
+  };
+
+  return (
+    `data: ${JSON.stringify(componentCreated)}\n\n` +
+    `data: ${JSON.stringify(messageComplete)}\n\n` +
+    `data: [DONE]\n\n`
+  );
+}
+
 test.describe("Agent component iteration", () => {
   test("component modification replaces with updated version", async ({
     page,
@@ -16,24 +66,13 @@ test.describe("Agent component iteration", () => {
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify({
-            type: "message_complete",
-            message: {
-              content: [
-                { type: "text", text: "Here's a basic tracker!" },
-                {
-                  type: "tool_use",
-                  id: "tool_1",
-                  name: "create_input_component",
-                  input: {
-                    title: "Tracker v1",
-                    description: "Basic tracker",
-                    code: '<div><input id="val" type="text"><button id="btn" onclick="window.submitInput(document.getElementById(\'val\').value)">Submit</button></div>',
-                  },
-                },
-              ],
-            },
-          })}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Here's a basic tracker!",
+            toolId: "tool_1",
+            title: "Tracker v1",
+            description: "Basic tracker",
+            code: '<div><input id="val" type="text"><button id="btn" onclick="window.submitInput(document.getElementById(\'val\').value)">Submit</button></div>',
+          }),
         });
       } else if (callCount === 2) {
         // Second call: verify activeComponent is included in the request
@@ -44,24 +83,13 @@ test.describe("Agent component iteration", () => {
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify({
-            type: "message_complete",
-            message: {
-              content: [
-                { type: "text", text: "Updated with a blue submit button!" },
-                {
-                  type: "tool_use",
-                  id: "tool_2",
-                  name: "create_input_component",
-                  input: {
-                    title: "Tracker v2",
-                    description: "Updated tracker with blue button",
-                    code: '<div><input id="val" type="text"><textarea id="notes" placeholder="Notes"></textarea><button id="btn" class="bg-blue-500 text-white p-2 rounded" onclick="window.submitInput({value: document.getElementById(\'val\').value, notes: document.getElementById(\'notes\').value})">Submit</button></div>',
-                  },
-                },
-              ],
-            },
-          })}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Updated with a blue submit button!",
+            toolId: "tool_2",
+            title: "Tracker v2",
+            description: "Updated tracker with blue button",
+            code: '<div><input id="val" type="text"><textarea id="notes" placeholder="Notes"></textarea><button id="btn" class="bg-blue-500 text-white p-2 rounded" onclick="window.submitInput({value: document.getElementById(\'val\').value, notes: document.getElementById(\'notes\').value})">Submit</button></div>',
+          }),
         });
       }
     });
@@ -107,24 +135,13 @@ test.describe("Agent component iteration", () => {
         await route.fulfill({
           status: 200,
           headers: { "Content-Type": "text/event-stream" },
-          body: `data: ${JSON.stringify({
-            type: "message_complete",
-            message: {
-              content: [
-                { type: "text", text: "Created!" },
-                {
-                  type: "tool_use",
-                  id: "tool_1",
-                  name: "create_input_component",
-                  input: {
-                    title: "Test",
-                    description: "Test component",
-                    code: "<div>test component code here</div>",
-                  },
-                },
-              ],
-            },
-          })}\n\ndata: [DONE]\n\n`,
+          body: buildComponentResponse({
+            text: "Created!",
+            toolId: "tool_1",
+            title: "Test",
+            description: "Test component",
+            code: "<div>test component code here</div>",
+          }),
         });
       } else {
         await route.fulfill({

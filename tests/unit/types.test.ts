@@ -127,6 +127,7 @@ describe("Component state transitions", () => {
       title: "Set Tracker",
       description: "Track workout sets",
       code: "<div>tracker</div>",
+      persistent: false,
     };
     expect(component.title).toBe("Set Tracker");
     expect(component.description).toBe("Track workout sets");
@@ -138,11 +139,13 @@ describe("Component state transitions", () => {
       title: "Set Tracker",
       description: "Track sets",
       code: "<div>v1</div>",
+      persistent: false,
     };
     const updated: CustomInputComponent = {
       title: "Set Tracker",
       description: "Track sets with RPE",
       code: "<div>v2</div>",
+      persistent: false,
     };
     expect(old).not.toEqual(updated);
     expect(updated.code).toContain("v2");
