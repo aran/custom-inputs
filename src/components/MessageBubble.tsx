@@ -2,6 +2,7 @@
 
 import type { Message } from "@/types/chat";
 import { parseCustomInputMessage } from "@/types/chat";
+import MarkdownContent from "./MarkdownContent";
 
 interface MessageBubbleProps {
   message: Message;
@@ -14,9 +15,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
           isUser
-            ? "bg-blue-600 text-white"
+            ? "bg-blue-600 text-white whitespace-pre-wrap"
             : "bg-zinc-800 text-zinc-100"
         }`}
       >
@@ -29,8 +30,10 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                 : String(parsed.data)}
             </div>
           </div>
-        ) : (
+        ) : isUser ? (
           message.content
+        ) : (
+          <MarkdownContent content={message.content} />
         )}
       </div>
     </div>
