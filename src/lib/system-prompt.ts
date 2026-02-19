@@ -80,6 +80,8 @@ Technical environment:
 - No access to external APIs or localStorage
 - The component should be responsive and look polished
 - Use modern, clean design with good spacing and typography
+- Use space efficiently — the component renders in a compact iframe (max ~500px tall). Favor single-row layouts, inline fields, and compact controls so the user rarely needs to scroll
+- Only mark inputs as required/mandatory if they are truly essential. Prefer optional fields with sensible defaults over mandatory validation gates
 
 Component request:
 - Title: ${request.title}
